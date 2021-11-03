@@ -32,15 +32,23 @@ function bothcanplayrx(): Observable<readonly unknown[]> {
   return rxjs.zip([fromEvent(facevideo, "canplay"), fromEvent(maskvideo, "canplay")]);
 }
 
+function bothplay() {
+  return rxjs.zip([fromEvent(facevideo, "play"), fromEvent(maskvideo, "play")]);
+}
+
+const playbutton = <HTMLButtonElement>document.getElementById("playbutton")
+playbutton.onclick = e => {
+  maskvideo.play();
+  facevideo.play();
+  playbutton.disabled = true;
+}
+
 function main() {
   bothcanplayrx().pipe(
     ops.concatMap(x => {
       console.log("both videos canplay", x);
-      return rxjs.from(maskvideo.play()).pipe(
-        ops.concatMap(x => {
-          return rxjs.from(facevideo.play())
-        })
-      )
+      playbutton.disabled = false;
+      return bothplay()
     })
   ).subscribe(x => {
     console.log("both playing", x);
@@ -58,11 +66,11 @@ function main() {
     });
     framerx(facevideo).subscribe((value: [HTMLVideoElement, number, any]) => {
       let faceTime = value[2]["mediaTime"];
-      if (maskTime != -1 && faceTime > (maskTime + 1/24)) {
+      if (maskTime != -1 && faceTime > (maskTime + 1 / 24)) {
         console.log("face is ahead of mask", faceTime, maskTime, (faceTime - maskTime) * 24);
       }
 
-      if (maskTime != -1 && maskTime > (faceTime + 1/24)) {
+      if (maskTime != -1 && maskTime > (faceTime + 1 / 24)) {
         console.log("mask is ahead of face", faceTime, maskTime, (maskTime - faceTime) * 24);
       }
     });
