@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "experimentalDecorators": true,
+    "transformers": {
+      "*.{ts,tsx}": [
+        "@parcel/transformer-typescript-tsc"
+      ]
+    }
+  }
+}

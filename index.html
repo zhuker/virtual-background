@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Virtual background</title>
+    <script type="module" src="app.ts"></script>
+    <style>
+        .parent {
+            position: relative;
+            top: 0;
+            left: 0;
+        }
+
+        .rel800 {
+            position: relative;
+            top: 0;
+            left: 0;
+            width: 800px;
+        }
+
+        .abs800 {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 800px;
+        }
+    </style>
+</head>
+<body style="background: grey">
+<div class="parent">
+    <!-- https://codepen.io/jonnyscholes/post/css-blend-modes -->
+    <img class="rel800" src="https://farm4.staticflickr.com/3888/15002876851_945906f3d6_z.jpg"/>
+    <canvas class="abs800" id="whiteonblack" width="800" height="532" style="mix-blend-mode: lighten;"></canvas>
+    <div class="abs800" style="mix-blend-mode: darken">
+        <video class="abs800" id="face" src="https://storage.googleapis.com/zhukervideo/headroom/megan_24fps.mp4"
+               style="mix-blend-mode: darken" muted></video>
+        <canvas class="abs800" id="blackonwhite" width="800" height="532" style="mix-blend-mode: lighten;"></canvas>
+    </div>
+
+
+</div>
+<video id="mask" src="https://storage.googleapis.com/zhukervideo/headroom/alpha800_84.mp4" muted></video>
+
+</body>
+</html>
