@@ -1,5 +1,5 @@
 import * as rxjs from "rxjs"
-import {fromEvent, Observable} from "rxjs"
+import {fromEvent, mergeMap, map, Observable} from "rxjs"
 import * as ops from "rxjs/operators"
 
 declare global {
@@ -28,6 +28,8 @@ function framerx(video: HTMLVideoElement): Observable<[HTMLVideoElement, number,
 
 let maskTime = -1;
 
+let maskRtpTime = -1;
+
 function bothcanplayrx(): Observable<readonly unknown[]> {
   return rxjs.zip([fromEvent(facevideo, "canplay"), fromEvent(maskvideo, "canplay")]);
 }
@@ -36,21 +38,38 @@ function bothplay() {
   return rxjs.zip([fromEvent(facevideo, "play"), fromEvent(maskvideo, "play")]);
 }
 
-const playbutton = <HTMLButtonElement>document.getElementById("playbutton")
-playbutton.onclick = e => {
-  maskvideo.play();
-  facevideo.play();
-  playbutton.disabled = true;
+function debugEvents(v: HTMLMediaElement) {
+  const events = [
+    "abort",
+    "canplay",
+    "canplaythrough",
+    "durationchange",
+    "emptied",
+    "ended",
+    "error",
+    "loadeddata",
+    "loadedmetadata",
+    "loadstart",
+    "pause",
+    "play",
+    "playing",
+    // "progress",
+    "ratechange",
+    "seeked",
+    "seeking",
+    "stalled",
+    "suspend",
+    // "timeupdate",
+    "volumechange",
+    "waiting"];
+  return rxjs.from(events).pipe(mergeMap(eventname => fromEvent(v, eventname).pipe(map(e => [eventname, e]))))
 }
 
+// debugEvents(facevideo).subscribe(x => console.log('face', x));
+// debugEvents(maskvideo).subscribe(x => console.log('mask', x));
+
 function main() {
-  bothcanplayrx().pipe(
-    ops.concatMap(x => {
-      console.log("both videos canplay", x);
-      playbutton.disabled = false;
-      return bothplay()
-    })
-  ).subscribe(x => {
+    return bothplay().subscribe(x => {
     console.log("both playing", x);
     const whiteonblack = <HTMLCanvasElement>document.getElementById("whiteonblack");
     const whiteonblackctx = whiteonblack.getContext('2d')
@@ -61,17 +80,20 @@ function main() {
 
     framerx(maskvideo).subscribe((value: [HTMLVideoElement, number, any]) => {
       maskTime = value[2]["mediaTime"];
+      maskRtpTime = value[2]["rtpTimestamp"];
+
       whiteonblackctx.drawImage(value[0], 0, 0);
       blackonwhitectx.drawImage(value[0], 0, 0);
     });
     framerx(facevideo).subscribe((value: [HTMLVideoElement, number, any]) => {
       let faceTime = value[2]["mediaTime"];
+      let faceRtpTime = value[2]["rtpTimestamp"];
       if (maskTime != -1 && faceTime > (maskTime + 1 / 24)) {
-        console.log("face is ahead of mask", faceTime, maskTime, (faceTime - maskTime) * 24);
+        console.log("face is ahead of mask", faceTime, maskTime, Math.round((faceTime - maskTime) * 24));
       }
 
       if (maskTime != -1 && maskTime > (faceTime + 1 / 24)) {
-        console.log("mask is ahead of face", faceTime, maskTime, (maskTime - faceTime) * 24);
+        console.log("mask is ahead of face", faceTime, maskTime, Math.round((maskTime - faceTime) * 24), faceRtpTime, maskRtpTime);
       }
     });
   });
