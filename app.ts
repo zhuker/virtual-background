@@ -1,6 +1,6 @@
 import * as rxjs from "rxjs"
-import {fromEvent, Observable} from "rxjs"
-import * as ops from "rxjs/operators"
+import {concatMap, fromEvent, map, mergeMap, Observable, zip} from "rxjs"
+import * as CircularBuffer from "circular-buffer"
 
 declare global {
   interface HTMLVideoElement {
@@ -26,29 +26,76 @@ function framerx(video: HTMLVideoElement): Observable<[HTMLVideoElement, number,
   })
 }
 
-let maskTime = -1;
-
 function bothcanplayrx(): Observable<readonly unknown[]> {
-  return rxjs.zip([fromEvent(facevideo, "canplay"), fromEvent(maskvideo, "canplay")]);
+  return zip([fromEvent(facevideo, "loadedmetadata"), fromEvent(maskvideo, "loadedmetadata")]);
 }
 
-function bothplay() {
-  return rxjs.zip([fromEvent(facevideo, "play"), fromEvent(maskvideo, "play")]);
+function onbothplay() {
+  return zip([fromEvent(facevideo, "play"), fromEvent(maskvideo, "play")]);
+}
+
+function playboth() {
+  return zip([rxjs.from(facevideo.play()), rxjs.from(maskvideo.play())]);
 }
 
 const playbutton = <HTMLButtonElement>document.getElementById("playbutton")
-playbutton.onclick = e => {
-  maskvideo.play();
-  facevideo.play();
-  playbutton.disabled = true;
+playbutton.onclick = () => {
+  maskvideo.load();
+  facevideo.load();
+}
+
+const MAX_FACE_LATENCY = 3;
+const canvasIdx = new CircularBuffer(MAX_FACE_LATENCY);
+const maskTimes = new CircularBuffer(MAX_FACE_LATENCY);
+
+interface CanvasCtx {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+}
+
+let whiteonblacks: CanvasCtx[] = []
+let blackonwhites: CanvasCtx[] = []
+
+for (let i = 0; i < MAX_FACE_LATENCY; i++) {
+  const whiteonblack = <HTMLCanvasElement>document.createElement("canvas");
+  whiteonblack.width = 800;
+  whiteonblack.height = 532;
+  const whiteonblackctx = whiteonblack.getContext('2d')
+  whiteonblacks.push({canvas: whiteonblack, ctx: whiteonblackctx});
+
+  const blackonwhite = <HTMLCanvasElement>document.createElement("canvas");
+  blackonwhite.width = 800;
+  blackonwhite.height = 532;
+  const blackonwhitectx = blackonwhite.getContext('2d')
+  blackonwhitectx.filter = 'invert(1)'
+  blackonwhites.push({canvas: blackonwhite, ctx: blackonwhitectx});
+}
+
+function debugEvents(v: HTMLMediaElement) {
+  const events = ["abort", "canplay", "canplaythrough", "durationchange", "emptied", "ended", "error", "loadeddata",
+    "loadedmetadata", "loadstart", "pause", "play", "playing", "progress", "ratechange", "seeked", "seeking", "stalled",
+    "suspend", "timeupdate", "volumechange", "waiting"];
+  return rxjs.from(events).pipe(mergeMap(eventname => fromEvent(v, eventname).pipe(map(e => [eventname, e]))))
+}
+
+// debugEvents(facevideo).subscribe(x => console.log("face", x));
+// debugEvents(maskvideo).subscribe(x => console.log("mask", x));
+
+function hmsms(sec: number): string {
+  let msec = Math.round(sec * 1000);
+  let ms = (msec % 1000) | 0;
+  let s = (sec % 60) | 0;
+  let m = (sec % 3600 / 60) | 0;
+  let h = (sec / 3600) | 0;
+
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}:${String(ms).padStart(3, '0')}`;
 }
 
 function main() {
   bothcanplayrx().pipe(
-    ops.concatMap(x => {
+    concatMap(x => {
       console.log("both videos canplay", x);
-      playbutton.disabled = false;
-      return bothplay()
+      return playboth()
     })
   ).subscribe(x => {
     console.log("both playing", x);
@@ -57,22 +104,52 @@ function main() {
 
     const blackonwhite = <HTMLCanvasElement>document.getElementById("blackonwhite");
     const blackonwhitectx = blackonwhite.getContext('2d')
-    blackonwhitectx.filter = 'invert(1)'
 
+    let maskFn = 0;
     framerx(maskvideo).subscribe((value: [HTMLVideoElement, number, any]) => {
-      maskTime = value[2]["mediaTime"];
-      whiteonblackctx.drawImage(value[0], 0, 0);
-      blackonwhitectx.drawImage(value[0], 0, 0);
+      let maskTime = value[2]["mediaTime"];
+      document.getElementById("masktimeindicator").innerHTML = hmsms(maskTime);
+      maskTimes.enq(maskTime);
+      canvasIdx.enq(maskFn % MAX_FACE_LATENCY);
+      maskFn++;
+      let idx = canvasIdx.get(0)
+      whiteonblacks[idx].ctx.drawImage(value[0], 0, 0);
+      blackonwhites[idx].ctx.drawImage(value[0], 0, 0);
     });
     framerx(facevideo).subscribe((value: [HTMLVideoElement, number, any]) => {
       let faceTime = value[2]["mediaTime"];
+      let mtimes = maskTimes.toarray();
+      let nearestdist = Number.MAX_VALUE;
+      let nearestidx = 0;
+      for (let i = 0; i < mtimes.length; i++) {
+        let dist = Math.abs(faceTime - mtimes[i])
+        if (dist < nearestdist) {
+          nearestdist = dist;
+          nearestidx = i;
+        }
+      }
+      let maskTime = mtimes[nearestidx];
+      blackonwhitectx.drawImage(blackonwhites[nearestidx].canvas, 0, 0);
+      whiteonblackctx.drawImage(whiteonblacks[nearestidx].canvas, 0, 0);
+
+      let str = "";
+      if (nearestidx != 0) {
+        str = `!mask ${hmsms(maskTime)} is ahead of face ${hmsms(faceTime)} by ${Math.ceil(Math.abs(maskTime - faceTime) * 24)} frames`
+        // console.log("!masktimes", mtimes, nearestidx)
+      }
+
       if (maskTime != -1 && faceTime > (maskTime + 1 / 24)) {
-        console.log("face is ahead of mask", faceTime, maskTime, (faceTime - maskTime) * 24);
+        str = `mask ${hmsms(maskTime)} is behind of face ${hmsms(faceTime)} by ${Math.ceil(Math.abs(maskTime - faceTime) * 24)} frames`
+        // console.log(str);
+        // console.log("masktimes", mtimes, nearestidx)
       }
 
       if (maskTime != -1 && maskTime > (faceTime + 1 / 24)) {
-        console.log("mask is ahead of face", faceTime, maskTime, (maskTime - faceTime) * 24);
+        str = `mask ${hmsms(maskTime)} is ahead of face ${hmsms(faceTime)} by ${Math.ceil(Math.abs(maskTime - faceTime) * 24)} frames`
+        // console.log(str);
+        // console.log("masktimes", mtimes, nearestidx)
       }
+      document.getElementById("facetimeindicator").innerHTML = hmsms(faceTime) + " " + str;
     });
   });
 }
