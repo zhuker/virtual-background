@@ -2,9 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Virtual background</title>
+    <title>WebRTC Virtual background</title>
     <script type="module" src="app.ts"></script>
     <style>
+        button {
+            padding: 8px 16px;
+        }
+
         .parent {
             position: relative;
             top: 0;
@@ -27,18 +31,25 @@
     </style>
 </head>
 <body style="background: grey">
-<button id="playbutton" disabled>Play</button>
+
+<div class="option">
+    <input id="use-stun" type="checkbox"/>
+    <label for="use-stun">Use STUN server</label>
+</div>
+<button id="start" onclick="start()">Start</button>
+<button id="stop" style="display: none" onclick="stop()">Stop</button>
 <div class="parent">
     <!-- https://codepen.io/jonnyscholes/post/css-blend-modes -->
     <img class="rel800" src="https://farm4.staticflickr.com/3888/15002876851_945906f3d6_z.jpg"/>
     <canvas class="abs800" id="whiteonblack" width="800" height="532" style="mix-blend-mode: lighten;"></canvas>
     <div class="abs800" style="mix-blend-mode: darken">
-        <video class="abs800" id="face" src="https://storage.googleapis.com/zhukervideo/headroom/megan_24fps.mp4"
-               style="mix-blend-mode: darken" muted></video>
+        <video class="abs800" id="face" style="mix-blend-mode: darken" muted autoplay="true" playsinline="true"></video>
         <canvas class="abs800" id="blackonwhite" width="800" height="532" style="mix-blend-mode: lighten;"></canvas>
     </div>
+    <audio id="audio" autoplay="true"></audio>
 </div>
-<video id="mask" src="https://storage.googleapis.com/zhukervideo/headroom/alpha800_84.mp4" muted></video>
+<video id="mask" muted autoplay="true" playsinline="true"></video>
 
+<script src="client.js"></script>
 </body>
 </html>
