@@ -123,6 +123,7 @@ function main() {
     const blackonwhitectx = blackonwhite.getContext('2d')
 
     let maskFn = 0;
+    let errorCount = 0;
     combineLatest([frameTimeRx(facevideo, "face"), frameTimeRx(maskvideo, "mask")]).subscribe(x => {
       let face = x.find(t => t.id == "face")
       let mask = x.find(t => t.id == "mask")
@@ -140,9 +141,17 @@ function main() {
       let nearest = findNearestIndex(face.rtpTimestamp, maskTimesArray);
       blackonwhitectx.drawImage(blackonwhites[nearest].canvas, 0, 0);
       whiteonblackctx.drawImage(whiteonblacks[nearest].canvas, 0, 0);
+      let maskRtpTime = maskTimesArray[nearest];
+      let err = "none";
+      if (face.rtpTimestamp > maskRtpTime) {
+        err = "mask BEHIND face.";
+      } else if (face.rtpTimestamp < maskRtpTime) {
+        err = "face BEHIND mask.";
+        errorCount++;
+      }
 
-      document.getElementById("facetimeindicator").innerHTML = hmsms(face.mediaTime) + " " + face.rtpTimestamp;
-      document.getElementById("masktimeindicator").innerHTML = hmsms(mask.mediaTime) + " " + maskTimesArray[nearest] + " lag: " + nearest + " frames";
+      document.getElementById("facetimeindicator").innerHTML = `${hmsms(face.mediaTime)} sync err: ${err}`;
+      document.getElementById("masktimeindicator").innerHTML = `${hmsms(mask.mediaTime)} ${maskRtpTime} lag: ${nearest} sync errors: ${errorCount * 100 / maskFn}%`;
     })
   });
 }
