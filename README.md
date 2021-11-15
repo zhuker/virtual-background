@@ -3,12 +3,25 @@
 ![screenshot](github/screenshot.jpg)
 
 
-# Build
+# Download media
 
 ```
 # wget 'https://storage.googleapis.com/zhukervideo/headroom/megan_nobf_24fps.mp4'
 # wget 'https://storage.googleapis.com/zhukervideo/headroom/alpha800_84.mp4'
-# pip3 install aiortc aiohttp
+```
+
+# Build custom webrtc server
+
+```
+# git clone https://github.com/zhuker/aiortc.git
+# cd aiortc
+# git checkout no-rtp-random-ts
+# python3 setup.py install
+```
+
+# Build web ui
+
+```
 # npm install
 # npx parcel build index.html 
 ```
